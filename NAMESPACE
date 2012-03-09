@@ -1,5 +1,6 @@
 export(boss.fit, boss.set, boss.ncdf, updateR2)
 import(lme4, geepack, Matrix, ncdf)
+useDynLib(boss)
 S3method(boss.fit, smcg)
 S3method(boss.fit, smvg)
 S3method(boss.fit, flm)

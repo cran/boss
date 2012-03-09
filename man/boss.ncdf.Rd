@@ -11,7 +11,8 @@ Wrapper function for anlayzing data in net CDF files
 Takes an object from boss.set() and a net CDF file, reads the data into memory in chunks and performs the analysis
 }
 \usage{
-boss.ncdf(nc, init, id.labels = NULL, g.labels = NULL, subset = NULL, gdim = 1, chunk = 1000, verbose = TRUE, outfile = NULL, ...)
+boss.ncdf(nc, init, id.labels = NULL, g.labels = NULL, subset = NULL, gdim = 1, 
+	chunk = 1000, verbose = TRUE, outfile = NULL, ...)
 }
 %- maybe also 'usage' for other objects documented here.
 \arguments{
@@ -91,7 +92,8 @@ snpdim <- dim.def.ncdf("position","bases", as.numeric(colnames(snpMat) ))
 sampledim <- dim.def.ncdf("sample", "count", as.numeric(rownames(snpMat) ))
 
 varsnp <- var.def.ncdf("snp", "rs", dim = snpdim, missval = -1, prec = "integer")
-vargeno <- var.def.ncdf("genotype","base", dim = list(snpdim, sampledim), missval = -1, prec = "double")
+vargeno <- var.def.ncdf("genotype","base", dim = list(snpdim, sampledim), 
+	missval = -1, prec = "double")
 genofile <- create.ncdf("Example.nc",list(varsnp,vargeno))
 
 for(i in 1:n){
@@ -103,9 +105,11 @@ nc <- open.ncdf("Example.nc")
 #generate 3 observations per person, with random intercept:
 id <- as.numeric(gl(3*n,3))
 y <- rnorm(3*n) + rnorm(n,sd=.3)[id]
-data <- data.frame(y=y, x1=rnorm(3*n,mean=y), x2 =rnorm(3*n), site=sample(6,n,replace=TRUE)[id], id=id )
+data <- data.frame(y=y, x1=rnorm(3*n,mean=y), x2 =rnorm(3*n), 
+	site=sample(6,n,replace=TRUE)[id], id=id )
 
-init <- boss.set(y~x1+x2+factor(site), id=data$id, data=data, type = "gee", method = "chol", corstr= "ar1")
+init <- boss.set(y~x1+x2+factor(site), id=data$id, data=data, 
+	type = "gee", method = "chol", corstr= "ar1")
 
 g.labels <- "position"
 id.labels <- "sample"

@@ -3,26 +3,6 @@ library(Matrix)
 library(lme4)
 library(ncdf)
 
-# updateR <- function (xnew, R = NULL, xold, eps = .Machine$double.eps){
-    # R <- as.matrix(R)
-    # xtx <- as.matrix(crossprod(xnew))
-    # norm.xnew <- sqrt(xtx)
-    # if (is.null(R)){
-        # R <- matrix(norm.xnew, 1, 1)
-        # attr(R, "rank") <- 1
-        # return(R)
-    # }
-    # Xtx <- drop(t(xnew) %*% xold)
-    # r <- backsolve(R,Xtx,transpose=T)
-    # rpp <- xtx - crossprod(r)
-    # rank <- attr(R, "rank")
-    # rpp <- sqrt(rpp)
-    # rank <- rank + 1
-    # R <- cbind(rbind(as.matrix(R), 0), c(r, rpp))
-    # attr(R, "rank") <- rank
-    # R
-# }
-
 updateR2 <- function (xnew, R = NULL, xold, eps = .Machine$double.eps){
     R <- as.matrix(R)
     xtx <- crossprod(xnew)
@@ -61,6 +41,95 @@ genCor <- function(maxClustSize, alpha, corstr){
 	stop("Unrecognized correlation structure, should be one of 'independence', 'exchangeable', 'unstructured', or 'ar1'")
 }
 
+phatsum <- function(x,y) { .Call("phatsum", listX=x, listr=y)}
+
+#dyn.load(paste("that",.Platform$dynlib.ext,sep=""))
+thatnew <- function(x) { .Call("thatnew", list=x)}
+
+
+sattdfONESTEP <- function( p, XVi, id, r, A, V ) {
+
+	# separate X and r into lists by id:
+	nclus <- length(unique(id))
+	listXVi <- lapply(split(XVi,id), matrix, nc=p)
+	listr <- lapply(split(r,id), matrix, nc=1)
+
+	Vm <- A
+
+	# run C code to get list of individual Phats, plus their sum = last element of list
+	Phat_C <- phatsum(listXVi,listr)
+
+	allPi <- lapply(Phat_C[1:nclus], function(x) {matrix(as.vector(x), ncol=1)} )
+	Phatavg <- matrix(as.vector(Phat_C[[nclus+1]]), ncol=1)/nclus
+
+
+	# subtract off Phatavg from each element, then call C code to compute That
+	C_input <- lapply(allPi, function(x){x-Phatavg})
+	That=thatnew(C_input)/nclus/(nclus-1)	
+
+	# compute var(vec(Vs))
+	varVs <- nclus^2 * (Vm %x% Vm) %*% That %*% (Vm %x% Vm)
+
+	# return df estimate
+	2 * V[p,p]^2 / varVs[p^2,p^2]
+
+}
+
+
+sattdfGEESE <- function( p, y, X, m, id, Vgeese, family,corstr) {
+
+	nclus <- length(unique(id))
+
+   	n <- NROW(X)
+      clust.sizes <- m$clusz	# gives cluster size for each set of grouped obs
+
+	m$fit <- family$linkinv(X%*%m$beta)
+	w <- family$variance(m$fit)
+	r <- y-m$fit
+
+        V <- 1
+        Vi <- 1
+        m$working.correlation <- genCor(max(clust.sizes), m$alpha, 
+            corstr)	
+      if (max(clust.sizes) > 1) {
+          for (i in 2:max(clust.sizes)) {
+              V <- c(V, list(m$working.correlation[1:i, 1:i])) 
+              Vi <- c(Vi, list(solve(V[[i]]))) 
+          }
+      }
+	Vi[[1]] <- matrix(Vi[[1]])
+
+	listVi <- lapply(clust.sizes, function(k) { Vi[[k]] })
+	listXViw <- mapply(list, lapply(split(X,id), matrix, ncol=p), listVi, split(w,id), SIMPLIFY=F)
+
+diagnew <- function(x) {	#x is vector
+	if(length(x)==1) matrix(x,nrow=1)
+	else diag(x)
+}
+
+	XVi <- lapply(listXViw, function(x) { (diagnew(1/sqrt(x[[3]]))%*%x[[2]]%*%diagnew(sqrt(x[[3]]))) %*% x[[1]] })
+	listr <- lapply(split(r,id), matrix, ncol=1)
+
+	Vm <- m$vbeta.naiv/m$gamma   
+
+	# run C code to get list of individual Phats, plus their sum = last element of list
+	Phat_C <- phatsum(XVi,listr)
+
+	allPi <- lapply(Phat_C[1:nclus], function(x) {matrix(as.vector(x), ncol=1)} )
+	Phatavg <- matrix(as.vector(Phat_C[[nclus+1]]), ncol=1)/nclus
+
+	# subtract off Phatavg from each element, then call C code to compute That
+	C_input <- lapply(allPi, function(x){x-Phatavg})
+	That=thatnew(C_input)/nclus/(nclus-1)	
+
+	# compute var(vec(Vs))
+	varVs <- nclus^2 * (Vm %x% Vm) %*% That %*% (Vm %x% Vm)
+
+	# return df estimate
+	2 * Vgeese[p,p]^2 / varVs[p^2,p^2]
+
+}
+
 boss.set <- function(formula, E.name=NULL, family=gaussian(), id = NULL, corstr = "independence", type="glm", method="chol", data,...){#
 	init <- NULL
 									
@@ -92,6 +161,12 @@ boss.set <- function(formula, E.name=NULL, family=gaussian(), id = NULL, corstr 
 		init$XD <- Wdi%*%init$X
 		init$R <- chol(crossprod(init$XD))
 		
+		###setup for FWL
+		init$AX <- solve(crossprod(init$XD))%*%t(init$XD)
+		init$yH <- t(as.matrix(init$y - init$XD%*%(init$AX%*%init$y)))
+		init$yH.var <- sum(c(init$yH)^2)/(init$n-init$p)
+		###
+		
 		if(!is.null(E.name)){
 			if( !(E.name %in% attr(terms(formula),"term.labels")) ){
 				stop("Main effect of E must be included")
@@ -116,7 +191,7 @@ boss.set <- function(formula, E.name=NULL, family=gaussian(), id = NULL, corstr 
 		init$corstr <- corstr
 		init$yhat <- m$fit <- family$linkinv(init$X%*%m$beta)
 		init$w <- family$variance(m$fit)
-		init$b <- coef(m)
+		init$b <- m$beta
 			
 		V <- 1
 		Vi <- 1
@@ -232,7 +307,9 @@ boss.set <- function(formula, E.name=NULL, family=gaussian(), id = NULL, corstr 
 		init$A <- solve(crossprod(init$Xy))		
 		init$AXy <- init$A%*%t(init$Xy)
 		init$yres <- var(as.numeric(init$z - init$XD%*%(solve(crossprod(init$XD))%*%t(init$XD)%*%init$z)))
-	}	
+	} #else if(method == "fwl"){
+	#	class(init) <- "fwl"
+	#}	
 	
 	return(init)
 }
@@ -241,14 +318,29 @@ boss.fit <- function(g, init, thresh = 1e-7, robust=TRUE,...){
 	UseMethod("boss.fit", init)
 }
 
+# boss.fit.fwl <- function(g, init, thresh = 1e-7, robust = TRUE,...){
+	# g <- as.matrix(g)
+	# dg <- as.matrix(init$d*g)
+
+	# gH <- dg - init$XD%*%(init$AX%*%dg)
+	
+	# gH2 <- colSums(gH^2)
+	# betas <- as.vector(init$yH%*%gH/gH2)
+	# res.vars <- colSums((t(init$yH) -gH%*%Diagonal(ncol(gH),betas))^2)/(init$n-init$p-1)
+	# vars <- res.vars/gH2
+	# chi2s <- betas^2/vars
+	# }
+
+
 boss.fit.smcg <- function(g,init, thresh = 1e-7, robust= TRUE,...){
 	g <- as.matrix(g)
 	dg <- as.matrix(init$d*g)
+	
 	betas <- init$AXy%*%dg
 	res <- dg - init$Xy%*%betas 
 	res.vars <- colSums(res^2)/(init$n-init$p-1)
 	chi2s <- betas[init$p+1,]^2/(res.vars*init$A[init$p+1,init$p+1])
-	
+		
 	#set missing those regressions where colinearity would prevent matrix inversion in standard methods:
 	chi2s[zapsmall(res.vars) == 0] <- NA	
 	
@@ -324,7 +416,7 @@ boss.fit.lmm.GxE <- function(g,init, thresh = 1e-7, robust= TRUE,...){
 		v.main = V[p-1,p-1], v.inter = V[p,p], cov.inter = V[p,p-1])
 	}
 
-boss.fit.flm <- function(g, init, thresh=1e-7, robust=TRUE,...){
+boss.fit.flm <- function(g, init, thresh=1e-7, robust=TRUE, kurtosis.correction= FALSE,...){
 	g <- as.numeric(g)
 	p <- init$p+1
 	
@@ -335,13 +427,24 @@ boss.fit.flm <- function(g, init, thresh=1e-7, robust=TRUE,...){
 	
 	beta <- A%*%c(init$XY,sum(g*init$y))
 	r <- init$y-X%*%beta
+	n <- init$n
+	
 	if(robust){
-		l <- as.vector(r)*X%*%A
-		V <- t(l)%*%l	
+		if(kurtosis.correction){
+			k <- n*sum(r^4)/sum(r^2)-3
+		} else {
+			k <- 0
+		}
+		V <- as.vector(r^2)%*%(X%*%A[p,])^2
+		
+		Cm <- (A[p,]%*%t(X))^4%*%r^4
+		df <- 2*(3+k)/(2+k)*V^2/Cm
+		
 	} else {
-		V <- sum(r^2)/(init$n-ncol(A))*A	
+		V <- sum(r^2)/(init$n-ncol(A))*A[p,p]	
+		df <- 1
 	}
-	list(beta.main=beta[p], v.main = V[p,p])
+	list(beta.main=beta[p], v.main = V, df = df)
 }
 	
 boss.fit.flm.GxE <- function(g, init, thresh=1e-7, robust=TRUE,...){
@@ -423,7 +526,7 @@ boss.fit.flr.GxE <- function(g, init,thresh=1e-7, robust=TRUE,...){
 		v.main = V[p-1,p-1], v.inter = V[p,p], cov.inter = V[p,p-1])
 }
 
-boss.fit.fgee.GxE <- function(g, init, thresh=1e-7, robust=TRUE,...){
+boss.fit.fgee.GxE <- function(g, init, thresh=1e-7, robust=TRUE,sattdf = FALSE,...){
 	g <- as.numeric(g)
 	p <- init$p+2
 	
@@ -444,6 +547,11 @@ boss.fit.fgee.GxE <- function(g, init, thresh=1e-7, robust=TRUE,...){
 		V <- A*sum(r^2)/(init$n-init$p-1)	
 	}
 	
+	df <- NA
+	if( sattdf == T & init$corstr == "independence" ) {
+		df <- sattdfONESTEP( p, XVi, init$id, r, A, V)
+	}
+	
 	if(1-pchisq(max(beta[p]^2/V[p,p],beta[p-1]^2/V[p-1,p-1]),1) < thresh & init$corstr != "independence"){
 		m <- geese(init$y~init$X[,-1]+g+g:init$E,id=init$id, corstr=init$corstr)
 		beta <- m$beta
@@ -453,11 +561,17 @@ boss.fit.fgee.GxE <- function(g, init, thresh=1e-7, robust=TRUE,...){
 			V <- m$vbeta.naiv	
 		}
 	}
-	list(beta.main = beta[p-1], beta.inter = beta[p], 
-		v.main = V[p-1,p-1], v.inter = V[p,p], cov.inter = V[p,p-1])
+	if(sattdf == FALSE) {
+	    list(beta.main = beta[p - 1], beta.inter = beta[p], v.main = V[p - 
+      	  1, p - 1], v.inter = V[p, p], cov.inter = V[p, p - 1])
+	}
+	else {
+	    list(beta.main = beta[p - 1], beta.inter = beta[p], v.main = V[p - 
+      	  1, p - 1], v.inter = V[p, p], cov.inter = V[p, p - 1], df.satt = df)
+	}
 }
 
-boss.fit.fgee <- function(g, init, thresh=1e-7, robust=TRUE,...){
+boss.fit.fgee <- function(g, init, thresh=1e-7, robust=TRUE,sattdf = FALSE,...){
 	g <- as.numeric(g)
 	p <- init$p+1
 	Gd <- g*init$dw #
@@ -474,6 +588,12 @@ boss.fit.fgee <- function(g, init, thresh=1e-7, robust=TRUE,...){
 	} else {
 		V <- A*sum(r^2)/(init$n-init$p-1)	
 	}
+	
+	df <- NA
+	if( sattdf == T & init$corstr == "independence" ) {
+		df <- sattdfONESTEP( p, XVi, init$id, r, A, V)
+	}
+	
 	if(1-pchisq(beta[p]^2/V[p,p],1) < thresh & init$corstr != "independence"){
 		m <- geese(init$y~init$X[,-1]+g,id=init$id, corstr=init$corstr)
 		beta <- m$beta
@@ -483,10 +603,15 @@ boss.fit.fgee <- function(g, init, thresh=1e-7, robust=TRUE,...){
 			V <- m$vbeta.naiv	
 		}
 	}
-	return(list(beta.main=beta[p], v.main = V[p,p]))
+	if(sattdf == F) {
+	    return(list(beta.main=beta[p], v.main = V[p,p]))
+	}
+	else {
+	    return(list(beta.main = beta[p], v.main = V[p,p], df.satt = df))
+	}
 }
 
-boss.fit.fgee.lr <- function(g, init, thresh=1e-7, robust=TRUE, ...){
+boss.fit.fgee.lr <- function(g, init, thresh=1e-7, robust=TRUE,sattdf=FALSE, ...){
 	g <- as.numeric(g)
 	p <- init$p+1
 	
@@ -511,11 +636,20 @@ boss.fit.fgee.lr <- function(g, init, thresh=1e-7, robust=TRUE, ...){
 		} else {
 			V <- m$vbeta.naiv	
 		}
+		if( sattdf == T ) {
+			df <- sattdfGEESE( p, init$y, cbind(init$X,g), m, init$id, V, family=binomial(),corstr=init$corstr )
+		}
+	}	
+	
+	if(sattdf == F) {
+	    return(list(beta.main=beta[p], v.main = V[p,p]))
 	}
-	return(list(beta.main=beta[p], v.main = V[p,p]))
+	else {
+	    return(list(beta.main = beta[p], v.main = V[p,p], df.satt = df))
+	}
 }
 
-boss.fit.fgee.lr.GxE <- function(g, init, thresh=1e-7, robust=TRUE, ...){
+boss.fit.fgee.lr.GxE <- function(g, init, thresh=1e-7, robust=TRUE,sattdf=FALSE, ...){
 	g <- as.numeric(g)
 	p <- init$p+2
 	
@@ -534,14 +668,27 @@ boss.fit.fgee.lr.GxE <- function(g, init, thresh=1e-7, robust=TRUE, ...){
 	} else {
 		 V <- A
 	}
+	
+	df <- NA
+	
 	if(1-pchisq(max(beta[p]^2/V[p,p],beta[p-1]^2/V[p-1,p-1]),1) < thresh){
 		m <- geese(init$y~init$X[,-1]+g+g:init$E,id=init$id, b=beta, family=binomial(), corstr=init$corstr)
 		beta <- m$beta
 		V <- m$vbeta
 		its <- m$iterations
+	
+		if( sattdf == T ) {
+			df <- sattdfGEESE( p, init$y, cbind(init$X,g,g*init$E), m, init$id, V, family=binomial(),corstr=init$corstr )
+		}
 	}
+	if(sattdf == F) {
 		list(beta.main = beta[p-1], beta.inter = beta[p], 
 		v.main = V[p-1,p-1], v.inter = V[p,p], cov.inter = V[p,p-1], iterations=its)
+	}
+	else {
+		list(beta.main = beta[p-1], beta.inter = beta[p], 
+		v.main = V[p-1,p-1], v.inter = V[p,p], cov.inter = V[p,p-1], iterations=its, df.satt = df)
+	}
 }
 
 
