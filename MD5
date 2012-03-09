@@ -1,9 +1,9 @@
-f5e997ccf67a608b061949fb43a23c82 *DESCRIPTION
+2c775d39871d1aac11da79511759a96c *DESCRIPTION
 314e08c5eb9afb40b3598b765fa04955 *NAMESPACE
-b35d3be316d84d76d2d00ddaf310b115 *R/boss.R
-cba8d8d9420e1752211a1d566277be09 *man/boss.fit.Rd
+c5b5ef0c0c1ce7528ab17adcd38ba098 *R/boss.R
+5391a83d5e19cdca8cf7646001a9f9b5 *man/boss.fit.Rd
 dc28db6d7cdbdaa4593c4ed9b69b0467 *man/boss.ncdf.Rd
-95447dad56eebc68d59ae80e3d6ae12d *man/boss.set.Rd
+bb1e72da5b99840ace41684967f24394 *man/boss.set.Rd
 cb8404d2897743e3af15ae523b6c0d09 *man/updateR2.Rd
 41602b152aff309d369cbd06ea7f8e87 *src/Makevars
 bf736bd8c64467c1d63701ea84e462f2 *src/phat.c

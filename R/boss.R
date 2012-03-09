@@ -242,12 +242,12 @@ boss.set <- function(formula, E.name=NULL, family=gaussian(), id = NULL, corstr 
 		if(init$family$family != "gaussian") stop("Only linear mixed models supported at this time")
 			
 		m <- lmer(formula, data = data)
-		init$X <- m@X
+		init$X <- getME(m,"X")
 		init$p <- ncol(init$X)
-		init$yhat <- m@mu
+		init$yhat <- getME(m,"mu")
 		init$data <- data
 		
-		V <- crossprod(m@A)+Diagonal(init$n,1)
+		V <- crossprod(getME(m,"A"))+Diagonal(init$n,1) 
 		V.sqrt <- chol(V)
 		Vi.sqrt <- solve(V.sqrt)
 		Vi <- Vi.sqrt%*%t(Vi.sqrt)
@@ -333,7 +333,7 @@ boss.fit <- function(g, init, thresh = 1e-7, robust=TRUE,...){
 
 
 boss.fit.smcg <- function(g,init, thresh = 1e-7, robust= TRUE,...){
-	g <- as.matrix(g)
+	g <- Matrix(g,sparse=TRUE)
 	dg <- as.matrix(init$d*g)
 	
 	betas <- init$AXy%*%dg
@@ -351,17 +351,17 @@ boss.fit.smcg <- function(g,init, thresh = 1e-7, robust= TRUE,...){
 	}
 	
 boss.fit.smvg <- function(g,init,thresh = 1e-7, robust= TRUE,...){
-	g <- as.matrix(g)
-	dg <- init$Wdi*g
+	g <- Matrix(g,sparse=TRUE)
+	dg <- init$Wdi%*%g
 	betas <- init$AXy%*%dg
 	res <- dg - init$Xy%*%betas 
 	res.vars <- colSums(res^2)/(init$n-init$p)
-	chi2s <- betas[init$p,]^2/(res.vars*init$A[init$p,init$p])
+	chi2s <- betas[init$p,]^2/(res.vars*init$A[init$p+1,init$p+1])
 	
 	#set missing those regressions where colinearity would prevent matrix inversion in standard methods:
 	chi2s[zapsmall(res.vars) == 0] <- NA	
 	
-	beta.main <- betas[init$p, ]*(init$yres/res.vars)
+	beta.main <- betas[init$p+1, ]*(init$yres/res.vars)
 	v.main <- chi2s/beta.main^2
 	
 	return(list(beta.main = beta.main, v.main = v.main, chi2s = chi2s))
@@ -382,9 +382,9 @@ boss.fit.lmm <- function(g,init, thresh = 1e-7, robust = TRUE, ...){
 	
 	if(1-pchisq(beta[p]^2/V[p,p],1) < thresh){
 		mod <- lmer(update(init$formula,.~.+g), data = init$data,...)
-		beta <- mod@fixef
+		beta <- getME(mod,"beta")
 		V <- vcov(mod)
-		k <- match("g",names(beta))
+		k <- match("g",colnames(V))
 		return(list(beta.main = beta[k], v.main = V[k,k]))		}
 	
 	return(list(beta.main=beta[p], v.main = V[p,p]))
@@ -405,9 +405,9 @@ boss.fit.lmm.GxE <- function(g,init, thresh = 1e-7, robust= TRUE,...){
 	
 	if(1-pchisq(max(beta[p]^2/V[p,p],beta[p-1]^2/V[p-1,p-1]),1) < thresh){
 		mod <- lmer(update(init$formula,.~.+g+g:init$E), data = init$data,...)
-		beta <- mod@fixef
+		beta <- get(mod,"beta")
 		V <- vcov(mod)
-		k <- pmatch(c("g","g:init$E"),names(beta))
+		k <- pmatch(c("g","g:init$E"),colnames(V))
 		list(beta.main = beta[k[1]], beta.inter = beta[k[2]], 
 			v.main = V[k[1],k[1]], v.inter = V[k[2],k[2]], cov.inter = V[k[1],k[2]])
 		}

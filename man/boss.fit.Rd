@@ -114,8 +114,9 @@ boss.fit(g[id], init1, robust=TRUE, thresh=1)
 boss.fit(g[id], init2)
 
 #full iteration (uses lmer, since "swap" method does not permit further iterations currently)
-mod <- summary(lmer(update(init2$formula,.~.+g[id]),data=data))
-list(beta.main = mod@fixef[9], v.main=mod@vcov[9,9], chi2 = mod@fixef[9]^2/mod@vcov[9,9])
+mod <- lmer(update(init2$formula,.~.+g[id]),data=data)
+list(beta.main = getME(mod,"beta")[9], v.main=vcov(mod)[9,9],
+     chi2 = getME(mod,"beta")[9]^2/vcov(mod)[9,9])
 
 ##Logistic Reg.
 boss.fit(g, init3)
