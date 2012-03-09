@@ -3,30 +3,25 @@ library(Matrix)
 library(lme4)
 library(ncdf)
 
-updateR <- function (xnew, R = NULL, xold, eps = .Machine$double.eps){
-    R <- as.matrix(R)
-    xtx <- as.matrix(crossprod(xnew))
-    norm.xnew <- sqrt(xtx)
-    if (is.null(R)) {
-        R <- matrix(norm.xnew, 1, 1)
-        attr(R, "rank") <- 1
-        return(R)
-    }
-    Xtx <- as.numeric(t(xnew) %*% xold)
-    k <- NCOL(R)
-    nb <- as.integer(1)
-    job <- as.integer(11)
-    r <- .C("bakslv", t = R, ldt = k, n = k, b = Xtx, ldb = k, 
-        nb = nb, x = matrix(0, k, nb), job = job, info = integer(1L), 
-        DUP = FALSE, PACKAGE = "base")["x"]$x
-    rpp <- xtx - crossprod(r)
-    rank <- attr(R, "rank")
-    rpp <- sqrt(rpp)
-    rank <- rank + 1
-    R <- cbind(rbind(as.matrix(R), 0), c(r, rpp))
-    attr(R, "rank") <- rank
-    R
-}
+# updateR <- function (xnew, R = NULL, xold, eps = .Machine$double.eps){
+    # R <- as.matrix(R)
+    # xtx <- as.matrix(crossprod(xnew))
+    # norm.xnew <- sqrt(xtx)
+    # if (is.null(R)){
+        # R <- matrix(norm.xnew, 1, 1)
+        # attr(R, "rank") <- 1
+        # return(R)
+    # }
+    # Xtx <- drop(t(xnew) %*% xold)
+    # r <- backsolve(R,Xtx,transpose=T)
+    # rpp <- xtx - crossprod(r)
+    # rank <- attr(R, "rank")
+    # rpp <- sqrt(rpp)
+    # rank <- rank + 1
+    # R <- cbind(rbind(as.matrix(R), 0), c(r, rpp))
+    # attr(R, "rank") <- rank
+    # R
+# }
 
 updateR2 <- function (xnew, R = NULL, xold, eps = .Machine$double.eps){
     R <- as.matrix(R)
@@ -38,16 +33,11 @@ updateR2 <- function (xnew, R = NULL, xold, eps = .Machine$double.eps){
         return(R)
     }
     Xtx <- as.matrix(t(xnew) %*% xold)
-    k <- NCOL(R)
-    nb <- as.integer(NCOL(xnew))
-    job <- as.integer(11)
-    r <- .C("bakslv", t = R, ldt = k, n = k, b = t(Xtx), ldb = k, 
-        nb = nb, x = matrix(0, k, nb), job = job, info = integer(1L), 
-        DUP = FALSE, PACKAGE = "base")["x"]$x
+    r <- backsolve(R, t(Xtx),transpose=T)
     rpp <- chol(xtx - crossprod(r))
     rank <- attr(R, "rank")
-    rank <- rank + 2
-    R <- cbind(rbind(R, 0,0), rbind(r, rpp))
+    rank <- rank + ncol(xtx)
+    R <- cbind(rbind(R, matrix(0,ncol(xtx),ncol(R))), rbind(r, rpp))
     attr(R, "rank") <- rank
     R
 }
@@ -62,7 +52,13 @@ genCor <- function(maxClustSize, alpha, corstr){
 	if(corstr=="ar1"){#ar1
 			return(alpha^abs(outer(1:maxClustSize,1:maxClustSize,"-")))
 	}
-	stop("Unrecognized correlation structure, should be one of 'independence', 'exchangeable' or 'ar1'")
+	if (corstr == "unstructured") {
+		m <- as.matrix(Diagonal(x=rep(1,maxClustSize)))
+		m[lower.tri(m)] <- alpha
+		m <- t(m)
+		m[lower.tri(m)] <- alpha
+	}
+	stop("Unrecognized correlation structure, should be one of 'independence', 'exchangeable', 'unstructured', or 'ar1'")
 }
 
 boss.set <- function(formula, E.name=NULL, family=gaussian(), id = NULL, corstr = "independence", type="glm", method="chol", data,...){#
@@ -283,7 +279,7 @@ boss.fit.lmm <- function(g,init, thresh = 1e-7, robust = TRUE, ...){
 	g <- as.numeric(g)
 	p <- init$p+1
 	
-	R <- updateR(as.matrix(t(init$Vi.sqrt)%*%g),init$R,init$XD)
+	R <- updateR2(as.matrix(t(init$Vi.sqrt)%*%g),init$R,init$XD)
 	X <- cbind(init$X,g)
 	
 	A <- chol2inv(R)
@@ -332,7 +328,7 @@ boss.fit.flm <- function(g, init, thresh=1e-7, robust=TRUE,...){
 	g <- as.numeric(g)
 	p <- init$p+1
 	
-	R <- updateR(g,init$R,init$XD)
+	R <- updateR2(g,init$R,init$XD)
 	A <- chol2inv(R)
 	
 	X <- cbind(init$X,g)
@@ -376,7 +372,7 @@ boss.fit.flr <- function(g, init, thresh = 1e-7, robust=TRUE,...){
 	
 	#First iterate
 	X <- cbind(init$X,g)
-	R <- updateR(g*sqrt(init$w),R=init$R,xold=init$XD)
+	R <- updateR2(g*sqrt(init$w),R=init$R,xold=init$XD)
 	A <- chol2inv(R)
 	beta <- c(init$b,0)+A%*%c(init$XY,sum((init$y-init$yhat)*g))
 	if(robust){
@@ -466,7 +462,7 @@ boss.fit.fgee <- function(g, init, thresh=1e-7, robust=TRUE,...){
 	p <- init$p+1
 	Gd <- g*init$dw #
 	Gv <- g*init$v #
-	R <- updateR(Gd,init$R,init$XD)
+	R <- updateR2(Gd,init$R,init$XD)
 	A <- chol2inv(R)
 	
 	X <- cbind(init$X,Gd)
@@ -494,7 +490,7 @@ boss.fit.fgee.lr <- function(g, init, thresh=1e-7, robust=TRUE, ...){
 	g <- as.numeric(g)
 	p <- init$p+1
 	
-	R <- updateR(g*init$d*init$w,init$R,init$XD)
+	R <- updateR2(g*init$d*init$w,init$R,init$XD)
 	A <- chol2inv(R)
 	
 	X <- cbind(init$X,g)

@@ -1,7 +1,7 @@
 \name{boss.set}
 \Rdversion{1.1}
 \alias{boss.set}
-\alias{genCor}
+%\alias{genCor}
 %- Also NEED an '\alias' for EACH other topic documented here.
 \title{
 %%  ~~function to do ... ~~
@@ -93,12 +93,12 @@ init2 <- boss.set(y~x1+x2+factor(site) + (1|id), type = "lmm", method = "swap", 
 
 #set up an interaction with logistic regression, which must use the "chol" method:
 y <- rbinom(n,1,0.5) 
-data.bin <- data.frame(y=y, x1=rnorm(n,mean=y), x2 =rnorm(n), e = rnorm(n), site=sample(6,n,replace=TRUE)[id], id=1:n)
+data.bin <- data.frame(y=y, x1=rnorm(n,mean=y), x2 =rnorm(n), e = rnorm(n), site=sample(6,n,replace=TRUE), id=1:n)
 
 init3 <- boss.set(y~x1+x2+factor(site)+e, E.name = "e", id=id, family=binomial(), type="glm", data = data.bin)
 
 ##fit the model (at one locus):
-g <- snpMat[1,]
+g <- snpMat[,1]
 
 ###GEE
 #one step approximation:
@@ -117,10 +117,10 @@ mod <- summary(lmer(update(init2$formula,.~.+g[id]),data=data))
 list(beta.main = mod@fixef[9], v.main=mod@vcov[9,9], chi2 = mod@fixef[9]^2/mod@vcov[9,9])
 
 ##Logistic Reg.
-boss.fit(g[id], init3)
+boss.fit(g, init3)
 
 #full iteration
-boss.fit(g[id], init3, thresh = 1)
+boss.fit(g, init3, thresh = 1)
 
 #for swap method, matrix arguments can be used to simultaneously fit many models:
 results <- boss.fit(t(snpMat[,id]),init2)

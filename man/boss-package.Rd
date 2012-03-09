@@ -7,12 +7,12 @@
 ~~Fast one-step approximations for GLM, GEE and Mixed Models~~
 }
 \description{
-BOSS uses parameter estimates obtained without genotype to boost standard one-step approximations, and precomputes as much as possible without genotype (using boss.set) to minimize effort required. 
+BOSS uses parameter estimates obtained without genotype for one-step approximations. In addition and pre-computes as much as possible without genotype (using boss.set) to minimize the computation required.
 }
 \details{
 boss.set & pre-computes as much as possible without genotype \cr
-boss.fit &  fits a model with genotype, using an object from boss.set \cr
-boss.ncdf & is a wrapper for interface with the 'ncdf' package \cr
+boss.fit & fits a model with genotype, using an object from boss.set \cr
+boss.ncdf & a wrapper for interface with the 'ncdf' package \cr
 }
 \author{
 Arend Voorman

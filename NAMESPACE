@@ -1,13 +1,22 @@
-# Default NAMESPACE created by R
-# Remove the previous line if you edit this file
+export(boss.fit, boss.set, boss.ncdf, updateR2)
+import(lme4, geepack, Matrix, ncdf)
+S3method(boss.fit, smcg)
+S3method(boss.fit, smvg)
+S3method(boss.fit, flm)
+S3method(boss.fit, flm.GxE)
+S3method(boss.fit, lmm)
+S3method(boss.fit, lmm.GxE)
+S3method(boss.fit, flr)
+S3method(boss.fit, flr.GxE)
+S3method(boss.fit, fgee)
+S3method(boss.fit, fgee.lr)
+S3method(boss.fit, fgee.GxE)
+S3method(boss.fit, fgee.lr.GxE)
 
-# Export all names
-exportPattern(".")
 
-# Import all packages listed as Imports or Depends
-import(
-  lme4,
-  geepack,
-  Matrix,
-  ncdf
-)
+
+
+
+
+
+
