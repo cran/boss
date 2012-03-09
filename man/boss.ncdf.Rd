@@ -60,6 +60,12 @@ aditional arguments to be given to boss.fit()
 Returns matrix of results giving the MAF of genotype, genotype-related coefficients and variances, and Chi Squared statistics.  If `outfile` is specified, it prints the results to `outfile.csv`, and no object is returned.
 
 }
+\references{
+\emph{Fast Computation for Genome Wide Association Studies using Boosted One-Step Statistics}
+Arend Voorman; Ken Rice; Thomas Lumley
+Bioinformatics 2012; doi: 10.1093/bioinformatics/bts291
+}
+
 \author{
 Arend Voorman
 }

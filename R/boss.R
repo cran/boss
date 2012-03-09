@@ -250,7 +250,7 @@ boss.fit.smcg <- function(g,init, thresh = 1e-7, robust= TRUE,...){
 	dg <- as.matrix(init$d*g)
 	betas <- init$AXy%*%dg
 	res <- dg - init$Xy%*%betas 
-	res.vars <- colSums(res^2)/(init$n-init$p)
+	res.vars <- colSums(res^2)/(init$n-init$p-1)
 	chi2s <- betas[init$p+1,]^2/(res.vars*init$A[init$p+1,init$p+1])
 	
 	#set missing those regressions where colinearity would prevent matrix inversion in standard methods:
@@ -290,13 +290,13 @@ boss.fit.lmm <- function(g,init, thresh = 1e-7, robust = TRUE, ...){
 	beta <- A%*%c(init$XY,sum(as.matrix(init$Vi%*%g)*init$y))
 	
 	r <- init$y-X%*%beta
-	V <- sum(r^2)/(init$n-ncol(A))*A	
+	V <- sum(r^2)/(init$n-p)*A	
 	
 	if(1-pchisq(beta[p]^2/V[p,p],1) < thresh){
 		mod <- lmer(update(init$formula,.~.+g), data = init$data,...)
 		beta <- mod@fixef
 		V <- vcov(mod)
-		k <-grep("g",beta)
+		k <- match("g",names(beta))
 		return(list(beta.main = beta[k], v.main = V[k,k]))		}
 	
 	return(list(beta.main=beta[p], v.main = V[p,p]))

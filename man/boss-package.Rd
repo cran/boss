@@ -19,6 +19,17 @@ Arend Voorman
 
 Maintainer: Arend Voorman <voorma@u.washington.ed>
 }
+\references{
+\emph{Fast Computation for Genome Wide Association Studies using Boosted One-Step Statistics}
+Arend Voorman; Ken Rice; Thomas Lumley
+Bioinformatics 2012; doi: 10.1093/bioinformatics/bts291
+
+\emph{Performance of generalized estimating equations in practical situations}
+Lipsitz, S.R. and Fitzmaurice, G.M. and Orav, E.J. and Laird, N.M.
+Biometrics, 1994, pp270-278
+}
+
+
 \keyword{ package }
 \examples{
 n <- 500

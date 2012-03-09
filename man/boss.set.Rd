@@ -50,9 +50,11 @@ boss.set(formula, E.name = NULL, family = gaussian(), id = NULL, corstr = "indep
 \value{
 An object to be used in `boss.set()'
 }
-%\references{
-%% ~put references to the literature/web site here ~
-%}
+\references{
+\emph{Fast Computation for Genome Wide Association Studies using Boosted One-Step Statistics}
+Arend Voorman; Ken Rice; Thomas Lumley
+Bioinformatics 2012; doi: 10.1093/bioinformatics/bts291
+}
 \author{
 Arend Voorman
 }

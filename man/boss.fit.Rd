@@ -54,7 +54,10 @@ optional arguments to be passed to the fitter functions if further iterations ar
   \item{v.inter}{when interaction term is supplied, the estimated variance of beta.inter}
   \item{cov.inter}{when interaction term is supplied, the estimated covariance between beta.inter and beta.main}
 }
-
+\references{
+\emph{Fast Computation for Genome Wide Association Studies using Boosted One-Step Statistics}
+Arend Voorman; Ken Rice; Thomas Lumley
+Bioinformatics 2012; doi: 10.1093/bioinformatics/bts291}
 \author{
 Arend Voorman
 }
